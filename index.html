@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Kafka Dashboard</title>
+    <!-- We will use the Chart.js library for our line chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+        }
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .header {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .header h1 {
+            margin: 0;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #e74c3c; /* Red by default */
+        }
+        .card {
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .kpi-grid {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+        .kpi-card {
+            background-color: #2a2a2a;
+            text-align: center;
+        }
+        .kpi-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #4ecca3;
+        }
+        .kpi-card .label {
+            font-size: 1em;
+            color: #a0a0a0;
+        }
+        .chart-card {
+            grid-column: 1 / -1; /* Make chart span full width */
+        }
+        .hashtags-card {
+            grid-column: 1 / -1;
+        }
+        h2 {
+            margin-top: 0;
+            color: #ffffff;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #333;
+        }
+        th {
+            color: #a0a0a0;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>📊 Real-Time Social Media Dashboard</h1>
+        <div class="status-indicator">
+            <div id="status-dot" class="status-dot"></div>
+            <span id="status-text">Connecting...</span>
+        </div>
+    </div>
+
+    <div class="dashboard-container">
+        <div class="kpi-grid">
+            <div class="card kpi-card">
+                <div class="value" id="likes-value">0</div>
+                <div class="label">Likes 👍</div>
+            </div>
+            <div class="card kpi-card">
+                <div class="value" id="posts-value">0</div>
+                <div class="label">Posts 📝</div>
+            </div>
+            <div class="card kpi-card">
+                <div class="value" id="comments-value">0</div>
+                <div class="label">Comments 💬</div>
+            </div>
+            <div class="card kpi-card">
+                <div class="value" id="shares-value">0</div>
+                <div class="label">Shares 🔁</div>
+            </div>
+        </div>
+
+        <div class="card chart-card">
+            <h2>Live Activity (Events Per Minute)</h2>
+            <canvas id="epmChart"></canvas>
+        </div>
+
+        <div class="card hashtags-card">
+            <h2>Top 5 Trending Hashtags</h2>
+            <table id="hashtags-table">
+                <thead>
+                    <tr>
+                        <th>Hashtag</th>
+                        <th>Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Rows will be inserted here by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<script>
+    // --- WebSocket Connection ---
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const socket = new WebSocket("ws://127.0.0.1:8000/ws");
+
+    socket.onopen = function(event) {
+        console.log("WebSocket connection established.");
+        statusDot.style.backgroundColor = "#2ecc71"; // Green
+        statusText.textContent = "Connected";
+    };
+
+    socket.onclose = function(event) {
+        console.log("WebSocket connection closed.");
+        statusDot.style.backgroundColor = "#e74c3c"; // Red
+        statusText.textContent = "Disconnected";
+    };
+
+    socket.onerror = function(error) {
+        console.error("WebSocket error:", error);
+        statusDot.style.backgroundColor = "#f39c12"; // Orange
+        statusText.textContent = "Error";
+    };
+
+    // --- Chart.js Initialization ---
+    const ctx = document.getElementById('epmChart').getContext('2d');
+    const epmChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Events Per Minute',
+                data: [],
+                borderColor: '#4ecca3',
+                backgroundColor: 'rgba(78, 204, 163, 0.2)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'second',
+                        displayFormats: {
+                           second: 'HH:mm:ss'
+                        }
+                    },
+                    ticks: { color: '#a0a0a0' }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#a0a0a0' }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+
+    // --- Data Update Functions ---
+    function updateKPIs(data) {
+        document.getElementById('likes-value').textContent = data.like_count || 0;
+        document.getElementById('posts-value').textContent = data.post_count || 0;
+        document.getElementById('comments-value').textContent = data.comment_count || 0;
+        document.getElementById('shares-value').textContent = data.share_count || 0;
+    }
+
+    function updateChart(data) {
+        const now = new Date();
+        const epm = data.events_per_minute || 0;
+
+        epmChart.data.labels.push(now);
+        epmChart.data.datasets[0].data.push(epm);
+
+        // Keep the chart from getting too crowded, only show last 30 points
+        if (epmChart.data.labels.length > 30) {
+            epmChart.data.labels.shift();
+            epmChart.data.datasets[0].data.shift();
+        }
+        epmChart.update();
+    }
+
+    function updateHashtags(data) {
+        const tableBody = document.querySelector("#hashtags-table tbody");
+        const hashtags = data.trending_hashtags || [];
+        
+        // Clear existing rows
+        tableBody.innerHTML = "";
+
+        if (hashtags.length === 0) {
+            const row = tableBody.insertRow();
+            const cell = row.insertCell();
+            cell.colSpan = 2;
+            cell.textContent = "Waiting for data...";
+            cell.style.textAlign = "center";
+        } else {
+            hashtags.forEach(item => {
+                const row = tableBody.insertRow();
+                const hashtagCell = row.insertCell();
+                const countCell = row.insertCell();
+                hashtagCell.textContent = item[0];
+                countCell.textContent = item[1];
+            });
+        }
+    }
+
+    // --- Main WebSocket Message Handler ---
+    socket.onmessage = function(event) {
+        console.log("Data received from Kafka:", event.data);
+        const data = JSON.parse(event.data);
+        
+        // Update all parts of the dashboard
+        updateKPIs(data);
+        updateChart(data);
+        updateHashtags(data);
+    };
+
+</script>
+
+</body>
+</html>
