@@ -2,13 +2,14 @@
 
 ## Overview
 
-This project demonstrates a real-time social media activity tracking system using Apache Kafka. It is designed to be a self-contained, easy-to-run example that showcases the core concepts of Kafka's producer-consumer architecture, along with stream processing and real-time dashboarding.
+This project demonstrates a real-time social media activity tracking system using Apache Kafka. It's a self-contained, easy-to-run example showcasing Kafka's producer-consumer architecture, stream processing, and real-time dashboarding.
 
 The system consists of four main components:
-- **Producer (producer.py):** Simulates user activity (posts, likes, comments, shares) and sends these events to a Kafka topic.
-- **Consumer (consumer.py):** A basic consumer that reads events from the Kafka topic and prints them to the console.
-- **Analytics Processor (nalytics_processor.py):** An intermediate service that consumes raw events, performs a simple aggregation (counting likes and posts), and sends the results to a new topic.
-- **Dashboard (dashboard.py):** A real-time web dashboard built with Streamlit that visualizes the aggregated data from the analytics topic.
+
+- **Producer (`producer.py`):** Simulates user activity (posts, likes, comments, shares) and sends these events to a Kafka topic.
+- **Consumer (`consumer.py`):** A basic consumer that reads events from the Kafka topic and prints them to the console.
+- **Analytics Processor (`analytics_processor.py`):** An intermediate service that consumes raw events, performs aggregation (counting likes and posts), and sends the results to a new topic.
+- **Dashboard (`dashboard.py`):** A real-time web dashboard built with Streamlit that visualizes the aggregated data from the analytics topic.
 
 The entire environment is containerized using Docker, making it easy to set up and run with minimal configuration.
 
@@ -19,71 +20,54 @@ The entire environment is containerized using Docker, making it easy to set up a
 
 ## Quick Start Guide
 
-This guide will help you get the basic producer and consumer running.
+1. **Start the Kafka environment:**
+```bash
+   docker-compose up -d
+```
 
-1.  **Start the Kafka Environment:**
-    Open your terminal, navigate to the project's root directory, and run the following command to start Kafka and Zookeeper in Docker:
-    docker-compose up -d
+2. **Install Python dependencies** (recommended inside a virtual environment):
+```bash
+   pip install -r requirements.txt
+```
 
-2.  **Install Python Dependencies:**
-    It is recommended to use a virtual environment. In the same directory, install the required Python libraries:
-    pip install -r requirements.txt
+3. **Run the producer and consumer** (two separate terminal windows):
 
-3.  **Run the Producer and Consumer:**
-    You will need two separate terminal windows for this step.
+   Terminal 1 — start the producer:
+```bash
+   python producer.py
+```
+   You should see a confirmation that a message is sent every second.
 
-    - In your **first terminal**, run the producer to start generating and sending events:
-      python producer.py
-      You should see a confirmation that a message has been sent every second.
-
-    - In your **second terminal**, run the consumer to receive and display the events:
-      python consumer.py
-      You will see the events being printed to the console as they are received.
+   Terminal 2 — start the consumer:
+```bash
+   python consumer.py
+```
+   You'll see events printed to the console as they're received.
 
 ## Advanced Features
 
-This section guides you through running the stream processor and the real-time dashboard. Make sure you have completed the "Quick Start Guide" steps first. The producer (producer.py) must be running to generate data.
+Make sure the Quick Start steps above are running first — `producer.py` needs to be active to generate data.
 
-1.  **Run the Analytics Processor:**
-    This service will consume raw events and produce aggregated data.
+1. **Run the analytics processor** (third terminal):
+```bash
+   python analytics_processor.py
+```
+   This counts "like" and "post" events and sends aggregated counts to a new topic.
 
-    - In a **third terminal**, run the analytics processor:
-      python analytics_processor.py
-      This will start counting "like" and "post" events and sending the aggregated counts to a new topic.
+2. **Run the real-time dashboard** (fourth terminal):
+```bash
+   streamlit run dashboard.py
+```
+   A browser tab opens showing live counts of likes and posts as they update.
 
-2.  **Run the Real-Time Dashboard:**
-    This will launch a web application to visualize the aggregated data.
-
-    - In a **fourth terminal**, run the Streamlit dashboard:
-      streamlit run dashboard.py
-      A new tab should open in your web browser with the real-time dashboard, displaying the counts of likes and posts as they are updated.
-
-To shut down the Kafka environment, simply run:
+To shut down the Kafka environment:
+```bash
 docker-compose down
-"@;
+```
 
-Set-Content -Path 'docker-compose.yml' -Value @"
-version: '3'
+## Tech Stack
 
-services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+- **Apache Kafka** — event streaming (producer-consumer architecture)
+- **Docker / Docker Compose** — containerized Kafka + Zookeeper setup
+- **Python** — producer, consumer, and analytics services
+- **Streamlit** — real-time dashboard visualization
